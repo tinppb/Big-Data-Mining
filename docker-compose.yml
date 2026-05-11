@@ -1,0 +1,11 @@
+services:
+  spark-lab:
+    image: jupyter/pyspark-notebook:latest
+    container_name: pyspark_container
+    ports:
+      - "8888:8888"  # Cổng vào Jupyter Notebook
+      - "4040:4040"  # Cổng vào Spark UI (để xem log chạy data)
+    volumes:
+      - ./notebooks:/home/jovyan/work
+    environment:
+      - JUPYTER_ENABLE_LAB=yes
