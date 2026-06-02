@@ -40,6 +40,58 @@ services:
     command: server /data --console-address ":9001"
     volumes:
       - minio_data:/data
+  # 4. Thêm Iceberg REST Catalog
+  rest_catalog:
+    image: tabulario/iceberg-rest:latest
+    container_name: iceberg_rest_catalog
+    ports:
+      - "8181:8181"
+    environment:
+      - CATALOG_CATALOG__IMPL=org.apache.iceberg.jdbc.JdbcCatalog
+      - CATALOG_URI=jdbc:postgresql://postgres:5432/retail_db
+      - CATALOG_JDBC_USER=admin
+      - CATALOG_JDBC_PASSWORD=password123
+      - CATALOG_WAREHOUSE=s3a://warehouse/
+      - CATALOG_IO__IMPL=org.apache.iceberg.aws.s3.S3FileIO
+      - CATALOG_S3_ENDPOINT=http://minio:9000
+      - CATALOG_S3_ACCESS__KEY__ID=admin
+      - CATALOG_S3_SECRET__ACCESS__KEY=password123
+    depends_on:
+      - postgres
+      - minio
+
+  # 5. Container Trino (Interactive Querying SQL)
+  trino:
+    image: trinodb/trino:latest
+    container_name: trino_engine
+    ports:
+      - "8080:8080"
+    volumes:
+      # Chúng ta sẽ cần tạo thư mục cấu hình catalog cho Trino sau
+      - ./work/trino_catalog:/etc/trino/catalog
+    depends_on:
+      - minio
+      - rest_catalog
+      
+  # 6. Container Apache Airflow (Lên lịch DAG tự động)
+  # Lưu ý: Airflow khá ngốn RAM, có thể khởi động hơi chậm ở lần đầu
+  airflow:
+    image: apache/airflow:2.7.1
+    container_name: airflow_scheduler
+    ports:
+      - "8081:8080" # Đổi cổng thành 8081 để không đụng hàng với Trino
+    environment:
+      - AIRFLOW__CORE__EXECUTOR=LocalExecutor
+      - AIRFLOW__DATABASE__SQL_ALCHEMY_CONN=postgresql+psycopg2://admin:password123@postgres:5432/retail_db
+      - AIRFLOW__CORE__LOAD_EXAMPLES=False
+    volumes:
+      - ./work/dags:/opt/airflow/dags
+    command: >
+      bash -c "airflow db init && 
+      airflow users create --username admin --password admin --firstname Admin --lastname User --role Admin --email admin@example.com && 
+      airflow webserver & airflow scheduler"
+    depends_on:
+      - postgres
 
 # Khai báo Volumes để lưu trữ dữ liệu vĩnh viễn
 volumes:
