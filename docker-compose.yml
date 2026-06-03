@@ -97,3 +97,6 @@ services:
 volumes:
   pgdata:
   minio_data:
+
+
+#MinIO: http://localhost:9001
